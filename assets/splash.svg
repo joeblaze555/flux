@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="2048" viewBox="0 0 2048 2048">
+  <defs>
+    <linearGradient id="fluxArc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06B6D4"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#8B5CF6" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ember" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#F59E0B" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#F59E0B" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="2048" height="2048" fill="#0B0F19"/>
+  <g transform="translate(1024 880)">
+    <circle cx="0" cy="0" r="460" fill="url(#halo)"/>
+    <circle cx="0" cy="0" r="315" fill="none" stroke="#FFFFFF" stroke-opacity="0.10" stroke-width="68"/>
+    <g transform="rotate(-60)">
+      <circle cx="0" cy="0" r="315" fill="none" stroke="url(#fluxArc)" stroke-width="68" stroke-linecap="round" stroke-dasharray="1649 330"/>
+    </g>
+    <circle cx="0" cy="0" r="126" fill="url(#ember)"/>
+    <circle cx="0" cy="0" r="55" fill="#F59E0B"/>
+  </g>
+  <text x="1048" y="1470" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="168" letter-spacing="48" fill="#F3F4F6">FLUX</text>
+  <text x="1035" y="1578" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="400" font-size="52" letter-spacing="22" fill="#9CA3AF">STEP INTO STILLNESS</text>
+</svg>
