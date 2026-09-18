@@ -1,0 +1,75 @@
+export default {
+  name: "Flux",
+  slug: "flux",
+  version: "1.0.0",
+  orientation: "portrait",
+  icon: "./assets/icon.png",
+  scheme: "flux",
+  userInterfaceStyle: "dark",
+  backgroundColor: "#0B0F19",
+  primaryColor: "#0B0F19",
+  ios: {
+    bundleIdentifier: "com.flux.app",
+    buildNumber: "1",
+    supportsTablet: true,
+    userInterfaceStyle: "dark",
+    icon: "./assets/icon.png",
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+      NSNotificationsUsageDescription:
+        "Flux sends a local notification when your focus session ends.",
+    },
+  },
+  android: {
+    versionCode: 1,
+    package: "com.halilu.fluxtimer",
+    userInterfaceStyle: "dark",
+    adaptiveIcon: {
+      foregroundImage: "./assets/adaptive-icon.png",
+      monochromeImage: "./assets/adaptive-icon.png",
+      backgroundColor: "#0B0F19",
+    },
+    permissions: ["android.permission.VIBRATE", "android.permission.WAKE_LOCK"],
+    predictiveBackGestureEnabled: false,
+  },
+  web: {
+    output: "static",
+    favicon: "./assets/images/favicon.png",
+    backgroundColor: "#0B0F19",
+    themeColor: "#0B0F19",
+  },
+  plugins: [
+    "expo-router",
+    [
+      "expo-splash-screen",
+      {
+        backgroundColor: "#0B0F19",
+        image: "./assets/splash.png",
+        imageWidth: 280,
+        resizeMode: "contain",
+        dark: {
+          backgroundColor: "#0B0F19",
+          image: "./assets/splash.png",
+        },
+      },
+    ],
+    [
+      "expo-notifications",
+      {
+        icon: "./assets/images/notification-icon.png",
+        color: "#8B5CF6",
+      },
+    ],
+  ],
+  experiments: {
+    typedRoutes: true,
+    reactCompiler: true,
+  },
+  extra: {
+    router: {},
+    eas: {
+      projectId: "754e4cf2-1366-4800-abca-a221c2aa8788",
+    },
+  },
+  owner: "haliluf160s-team",
+};

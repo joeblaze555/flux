@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Flux",
-    "slug": "flux-timer",
+    "slug": "flux",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -21,15 +21,18 @@
       }
     },
     "android": {
-      "package": "com.flux.app",
       "versionCode": 1,
+      "package": "com.halilu.fluxtimer",
       "userInterfaceStyle": "dark",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "monochromeImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0B0F19"
       },
-      "permissions": ["android.permission.VIBRATE", "android.permission.WAKE_LOCK"],
+      "permissions": [
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -64,6 +67,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "754e4cf2-1366-4800-abca-a221c2aa8788"
+      }
+    },
+    "owner": "haliluf160s-team"
   }
 }
