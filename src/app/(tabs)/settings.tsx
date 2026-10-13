@@ -46,7 +46,7 @@ const GOAL_OPTIONS = [30, 60, 90, 120] as const;
 const APP_VERSION: string =
   typeof Constants.expoConfig?.version === 'string' && Constants.expoConfig.version.length > 0
     ? Constants.expoConfig.version
-    : '1.0.0';
+    : '1.0.1';
 
 /**
  * Load preferences with a fallback for the legacy `{ defaultDuration }`

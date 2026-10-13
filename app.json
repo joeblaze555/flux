@@ -2,7 +2,7 @@
   "expo": {
     "name": "Flux",
     "slug": "flux",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "flux",
@@ -11,7 +11,7 @@
     "primaryColor": "#0B0F19",
     "ios": {
       "bundleIdentifier": "com.halilu.fluxtimer",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "supportsTablet": true,
       "userInterfaceStyle": "dark",
       "icon": "./assets/icon.png",
@@ -21,7 +21,7 @@
       }
     },
     "android": {
-      "versionCode": 1,
+      "versionCode": 2,
       "package": "com.halilu.fluxtimer",
       "userInterfaceStyle": "dark",
       "adaptiveIcon": {
