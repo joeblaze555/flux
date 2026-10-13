@@ -13,7 +13,7 @@ import { FluxCanvas } from '@/components/FluxCanvas';
 import { SESSIONS_STORE_KEY, useTimerEngine, type HapticLevel } from '@/hooks/useTimerEngine';
 import { initNotifications } from '@/lib/notifications';
 
-import { ART_PRESETS, PRESET_KEY } from './gallery';
+import { ART_PRESETS, PRESET_KEY, getCachedPresetId } from './gallery';
 import { DEFAULT_PREFS, loadPrefs, type FluxPrefs } from './settings';
 
 const BG = '#0B0F19';
@@ -54,11 +54,15 @@ export default function TimerScreen() {
 
   const loadDisplayPrefs = useCallback(async () => {
     try {
+      // Prefer the in-memory preset: it is published synchronously on select,
+      // so it wins even if this focus-read races the AsyncStorage write.
+      const cachedPreset = getCachedPresetId();
       const [savedPreset, savedPrefs] = await Promise.all([
         AsyncStorage.getItem(PRESET_KEY),
         loadPrefs(),
       ]);
-      if (savedPreset) setPresetId(savedPreset);
+      const resolved = cachedPreset ?? savedPreset;
+      if (resolved) setPresetId(resolved);
       setPrefs(savedPrefs);
     } catch {
       // Best effort — defaults remain.
@@ -83,7 +87,13 @@ export default function TimerScreen() {
       for (const entry of parsed) {
         if (typeof entry !== 'object' || entry === null) continue;
         const rec = entry as { durationMinutes?: unknown; completedAt?: unknown };
-        if (typeof rec.durationMinutes !== 'number' || typeof rec.completedAt !== 'string') continue;
+        if (
+          typeof rec.durationMinutes !== 'number' ||
+          !Number.isFinite(rec.durationMinutes) ||
+          rec.durationMinutes <= 0 ||
+          typeof rec.completedAt !== 'string'
+        )
+          continue;
         const d = new Date(rec.completedAt);
         if (Number.isNaN(d.getTime())) continue;
         if (
@@ -113,10 +123,17 @@ export default function TimerScreen() {
     void initNotifications();
   }, []);
 
+  // Refresh today's total when a session completes while staying on screen,
+  // otherwise the goal widget lags one session behind until tab refocus.
+  const handleSessionComplete = useCallback(() => {
+    void loadTodayMinutes();
+  }, [loadTodayMinutes]);
+
   const { status, remainingMs, progress, start, pause, resume, reset } = useTimerEngine({
     presetId,
     defaultDurationMs: prefs.defaultDurationMs,
     hapticLevel: prefs.hapticLevel,
+    onComplete: handleSessionComplete,
   });
 
   // Auto-start: after settling into stillness, begin the next session.

@@ -15,6 +15,8 @@ export const DEFAULT_DURATION_MS = 25 * 60 * 1000;
 const TICK_MS = 200;
 /** Final stretch that gets a per-second haptic tick. */
 const FINAL_COUNTDOWN_SECONDS = 10;
+/** Upper bound on stored sessions so history reads stay cheap forever. */
+const MAX_STORED_SESSIONS = 1000;
 
 export const SESSIONS_STORE_KEY = 'flux:sessions';
 
@@ -87,6 +89,11 @@ export async function recoverActiveSession(): Promise<void> {
         completedAt: Number.isNaN(expiry.getTime()) ? new Date().toISOString() : expiry.toISOString(),
       });
       await clearActiveSession();
+    } else {
+      // Relaunched before expiry but the countdown is gone (fresh idle UI) —
+      // the session was abandoned, not completed. Clear the marker so a
+      // later relaunch past the original expiry can't log it as completed.
+      await clearActiveSession();
     }
   } catch {
     // Recovery is best-effort.
@@ -117,7 +124,10 @@ export async function saveSession(input: {
       id: `session-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`,
       ...input,
     };
-    await AsyncStorage.setItem(SESSIONS_STORE_KEY, JSON.stringify([...sessions, entry]));
+    const next = [...sessions, entry];
+    // Cap history so AsyncStorage read/write + history sort stay cheap forever.
+    const capped = next.length > MAX_STORED_SESSIONS ? next.slice(next.length - MAX_STORED_SESSIONS) : next;
+    await AsyncStorage.setItem(SESSIONS_STORE_KEY, JSON.stringify(capped));
   } catch {
     // Persistence is best-effort.
   }
@@ -205,18 +215,25 @@ export function useTimerEngine(options: UseTimerEngineOptions = {}): UseTimerEng
 
   // OS-level expiry banner. Replaced on every start/resume so at most one is
   // ever pending; it fires even if JS is suspended or the app is backgrounded.
+  // `notificationGenRef` invalidates in-flight schedules: a pause/reset that
+  // lands while a schedule is awaiting the native bridge must suppress it,
+  // otherwise an orphan banner fires for a non-running session.
   const notificationIdRef = useRef<string | null>(null);
+  const notificationGenRef = useRef(0);
 
   const scheduleExpiry = useCallback(() => {
+    const gen = (notificationGenRef.current += 1);
     (async () => {
       const pending = notificationIdRef.current;
       notificationIdRef.current = null;
       await cancelExpiryNotification(pending);
+      if (gen !== notificationGenRef.current) return;
       notificationIdRef.current = await scheduleExpiryNotification(remainingRef.current);
     })();
   }, []);
 
   const cancelExpiry = useCallback(() => {
+    notificationGenRef.current += 1;
     (async () => {
       const pending = notificationIdRef.current;
       notificationIdRef.current = null;
@@ -302,6 +319,7 @@ export function useTimerEngine(options: UseTimerEngineOptions = {}): UseTimerEng
   }, [tick]);
 
   const start = useCallback(() => {
+    if (statusRef.current === 'running') return;
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -379,18 +397,17 @@ export function useTimerEngine(options: UseTimerEngineOptions = {}): UseTimerEng
     setStatus('idle');
   }, [cancelExpiry]);
 
-  // Background handling: snapshot on leave, rebuild endAt + recalc instantly on return.
+  // Background handling: wall-clock `endAtRef` stays authoritative while
+  // backgrounded so the in-app countdown agrees with the scheduled OS banner.
+  // On return, just recalculate instantly — never rebuild `endAt` from a
+  // background-entry snapshot, which would extend the session by the time
+  // spent backgrounded and desync it from the notification.
   useEffect(() => {
     appStateRef.current = AppState.currentState;
     const subscription = AppState.addEventListener('change', (next) => {
-      const prev = appStateRef.current;
       appStateRef.current = next;
       if (statusRef.current !== 'running') return;
-      if (next === 'background' || next === 'inactive') {
-        remainingRef.current = Math.max(0, endAtRef.current - Date.now());
-        setRemainingMs(remainingRef.current);
-      } else if (next === 'active' && (prev === 'background' || prev === 'inactive')) {
-        endAtRef.current = Date.now() + remainingRef.current;
+      if (next === 'active') {
         tickRef.current();
       }
     });

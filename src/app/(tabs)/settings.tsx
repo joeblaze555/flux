@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -93,20 +93,30 @@ async function fireForLevel(level: HapticLevel) {
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const [prefs, setPrefs] = useState<FluxPrefs>(DEFAULT_PREFS);
+  // Synchronous mirror of prefs: updated in the same tick as setPrefs, so
+  // rapid taps always merge onto the latest values instead of a stale render
+  // closure (which would silently drop the earlier write).
+  const prefsRef = useRef<FluxPrefs>(DEFAULT_PREFS);
 
   useEffect(() => {
     (async () => {
-      setPrefs(await loadPrefs());
+      const loaded = await loadPrefs();
+      prefsRef.current = loaded;
+      setPrefs(loaded);
     })();
   }, []);
 
-  const persist = useCallback(async (next: FluxPrefs) => {
+  const updatePrefs = useCallback((patch: Partial<FluxPrefs>) => {
+    const next: FluxPrefs = { ...prefsRef.current, ...patch };
+    prefsRef.current = next;
     setPrefs(next);
-    try {
-      await AsyncStorage.setItem(PREFS_KEY, JSON.stringify(next));
-    } catch {
-      // Best effort.
-    }
+    void (async () => {
+      try {
+        await AsyncStorage.setItem(PREFS_KEY, JSON.stringify(next));
+      } catch {
+        // Best effort.
+      }
+    })();
   }, []);
 
   const hapticLabel = (o: HapticLevel) => (o === 'off' ? 'Off' : o === 'light' ? 'Light' : 'Medium');
@@ -135,8 +145,8 @@ export default function SettingsScreen() {
                   accessibilityLabel={`Default ${minutes} minutes`}
                   accessibilityState={{ selected: active }}
                   onPress={() => {
-                    void fireForLevel(prefs.hapticLevel);
-                    void persist({ ...prefs, defaultDurationMs: ms });
+                    void fireForLevel(prefsRef.current.hapticLevel);
+                    updatePrefs({ defaultDurationMs: ms });
                   }}
                   style={({ pressed }) => [
                     styles.chip,
@@ -163,7 +173,7 @@ export default function SettingsScreen() {
                   accessibilityState={{ selected: active }}
                   onPress={() => {
                     void fireForLevel(o === 'off' ? 'light' : o);
-                    void persist({ ...prefs, hapticLevel: o });
+                    updatePrefs({ hapticLevel: o });
                   }}
                   style={({ pressed }) => [
                     styles.chip,
@@ -191,8 +201,8 @@ export default function SettingsScreen() {
                   accessibilityLabel={`Daily goal ${minutes} minutes`}
                   accessibilityState={{ selected: active }}
                   onPress={() => {
-                    void fireForLevel(prefs.hapticLevel);
-                    void persist({ ...prefs, dailyGoalMinutes: minutes });
+                    void fireForLevel(prefsRef.current.hapticLevel);
+                    updatePrefs({ dailyGoalMinutes: minutes });
                   }}
                   style={({ pressed }) => [
                     styles.chip,
@@ -216,8 +226,8 @@ export default function SettingsScreen() {
               value={prefs.autoStart}
               accessibilityLabel="Auto-start next session"
               onValueChange={(v) => {
-                void fireForLevel(prefs.hapticLevel);
-                void persist({ ...prefs, autoStart: v });
+                void fireForLevel(prefsRef.current.hapticLevel);
+                updatePrefs({ autoStart: v });
               }}
               trackColor={{ false: MUTED, true: ACCENT }}
             />

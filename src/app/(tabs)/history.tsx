@@ -51,6 +51,7 @@ function isValidSession(value: unknown): value is FocusSession {
     typeof v.id === 'string' &&
     typeof v.durationMinutes === 'number' &&
     Number.isFinite(v.durationMinutes) &&
+    v.durationMinutes > 0 &&
     typeof v.presetId === 'string' &&
     typeof v.completedAt === 'string' &&
     !Number.isNaN(new Date(v.completedAt).getTime())
@@ -112,6 +113,76 @@ export function formatTotalTime(totalMinutes: number): string {
   if (h > 0 && m > 0) return `${h}h ${m}m`;
   if (h > 0) return `${h}h`;
   return `${m}m`;
+}
+
+export interface WeeklyDay {
+  key: string;
+  /** Single-letter weekday (S/M/T/W/T/F/S) for the compact bar chart. */
+  weekday: string;
+  /** Day-of-month number for context under the bar. */
+  dayNumber: number;
+  minutes: number;
+  count: number;
+  isToday: boolean;
+}
+
+/**
+ * Last 7 local calendar days ending today (oldest → newest).
+ *
+ * Pure computation over `flux:sessions` — AsyncStorage read only.
+ * No location, camera, notifications, or other runtime permissions involved
+ * (Expo SDK v57: AsyncStorage + Clipboard + Haptics require no permission
+ * prompt; see https://docs.expo.dev/versions/v57.0.0/sdk/clipboard/ and
+ * /sdk/haptics/ + /sdk/async-storage/).
+ */
+export function calculateWeeklyOverview(
+  sessions: FocusSession[],
+  now: Date = new Date(),
+): WeeklyDay[] {
+  const totals = new Map<string, { minutes: number; count: number }>();
+  for (const s of sessions) {
+    const k = dayKeyFromISO(s.completedAt);
+    if (!k) continue;
+    const entry = totals.get(k) ?? { minutes: 0, count: 0 };
+    entry.minutes +=
+      typeof s.durationMinutes === 'number' && Number.isFinite(s.durationMinutes)
+        ? Math.max(0, Math.round(s.durationMinutes))
+        : 0;
+    entry.count += 1;
+    totals.set(k, entry);
+  }
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const letters = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (6 - i));
+    const key = dayKeyLocal(d);
+    const entry = totals.get(key) ?? { minutes: 0, count: 0 };
+    return {
+      key,
+      weekday: letters[d.getDay()] ?? '',
+      dayNumber: d.getDate(),
+      minutes: entry.minutes,
+      count: entry.count,
+      isToday: i === 6,
+    };
+  });
+}
+
+/** "Mon 12: 3 sessions · 45m" style one-liner per day, joined for clipboard share. */
+export function buildWeeklySummary(days: WeeklyDay[]): string {
+  const total = days.reduce((sum, d) => sum + d.minutes, 0);
+  const count = days.reduce((sum, d) => sum + d.count, 0);
+  const best = days.reduce<WeeklyDay | null>(
+    (acc, d) => (!acc || d.minutes > acc.minutes ? d : acc),
+    null,
+  );
+  const bestLabel = best && best.minutes > 0 ? ` · best ${best.weekday} ${formatTotalTime(best.minutes)}` : '';
+  return (
+    `Flux this week: ${count} session${count === 1 ? '' : 's'}` +
+    ` · ${formatTotalTime(total)} total${bestLabel}`
+  );
 }
 
 function formatRowTime(iso: string): string {
@@ -225,7 +296,7 @@ export default function HistoryScreen() {
 
   const sessionCount = sessions.length;
   const totalMinutes = useMemo(
-    () => sessions.reduce((sum, s) => sum + s.durationMinutes, 0),
+    () => sessions.reduce((sum, s) => sum + Math.max(0, s.durationMinutes), 0),
     [sessions],
   );
   const streak = useMemo(() => calculateStreak(sessions), [sessions]);
@@ -242,6 +313,27 @@ export default function HistoryScreen() {
   }, [sessions, sessionCount]);
 
   const groups = useMemo(() => groupSessionsByDate(sessions), [sessions]);
+
+  // No-permission weekly overview: pure AsyncStorage aggregation, rendered
+  // with plain Views. Copy uses expo-clipboard `setStringAsync` which needs
+  // no permission prompt on iOS/Android per Expo SDK v57 docs.
+  const weekly = useMemo(() => calculateWeeklyOverview(sessions), [sessions]);
+  const weekTotal = useMemo(() => weekly.reduce((sum, d) => sum + d.minutes, 0), [weekly]);
+  const weekLabel = useMemo(() => formatTotalTime(weekTotal), [weekTotal]);
+  const weekMax = useMemo(() => Math.max(1, ...weekly.map((d) => d.minutes)), [weekly]);
+
+  const handleCopyWeekly = useCallback(() => {
+    if (sessions.length === 0) return;
+    const summary = buildWeeklySummary(weekly);
+    void (async () => {
+      try {
+        await Clipboard.setStringAsync(summary);
+        Alert.alert('Copied', 'Your weekly overview is on the clipboard.');
+      } catch {
+        Alert.alert('Copy failed', 'Could not reach the clipboard. Try again.');
+      }
+    })();
+  }, [sessions.length, weekly]);
 
   const handleCopySummary = useCallback(() => {
     if (sessions.length === 0) return;
@@ -314,6 +406,53 @@ export default function HistoryScreen() {
             caption="sessions"
             label={`Total sessions ${sessionCount}`}
           />
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.weekHeader}>
+            <View>
+              <Text style={styles.cardTitle}>This week</Text>
+              <Text style={styles.weekSub} accessibilityLabel={`Weekly total ${weekLabel}`}>
+                {weekLabel} total · no permissions needed
+              </Text>
+            </View>
+            {sessionCount > 0 && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Copy weekly overview"
+                onPress={handleCopyWeekly}
+                style={({ pressed }) => [styles.copy, pressed && styles.pressed]}>
+                <Text style={styles.copyText}>Copy week</Text>
+              </Pressable>
+            )}
+          </View>
+          <View style={styles.weekRow}>
+            {weekly.map((day) => {
+              const heightPct =
+                day.minutes <= 0 ? 0 : Math.max(8, Math.round((day.minutes / weekMax) * 100));
+              return (
+                <View
+                  key={day.key}
+                  style={styles.weekCol}
+                  accessibilityLabel={`${day.key}: ${day.minutes} minutes in ${day.count} sessions`}>
+                  <Text style={styles.weekMinutes}>{day.minutes > 0 ? `${day.minutes}m` : ''}</Text>
+                  <View style={styles.weekTrack}>
+                    <View
+                      style={[
+                        styles.weekFill,
+                        { height: `${heightPct}%` },
+                        day.isToday && styles.weekFillToday,
+                      ]}
+                    />
+                  </View>
+                  <Text style={[styles.weekDay, day.isToday && styles.weekDayToday]}>
+                    {day.weekday}
+                  </Text>
+                  <Text style={styles.weekDate}>{day.dayNumber}</Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
 
         <View style={styles.card}>
@@ -481,6 +620,67 @@ const styles = StyleSheet.create({
   fill: {
     height: 8,
     borderRadius: 4,
+  },
+  weekHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  weekSub: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: MUTED,
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
+  },
+  weekRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  weekCol: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  weekMinutes: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: MUTED,
+    height: 14,
+    fontVariant: ['tabular-nums'],
+  },
+  weekTrack: {
+    height: 72,
+    width: '100%',
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+  },
+  weekFill: {
+    width: '100%',
+    borderRadius: 8,
+    backgroundColor: ACCENT,
+    opacity: 0.75,
+  },
+  weekFillToday: {
+    backgroundColor: CALM,
+    opacity: 1,
+  },
+  weekDay: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: MUTED,
+  },
+  weekDayToday: {
+    color: TEXT,
+  },
+  weekDate: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: MUTED,
+    fontVariant: ['tabular-nums'],
   },
   logHeader: {
     flexDirection: 'row',

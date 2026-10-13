@@ -10,7 +10,7 @@
     "backgroundColor": "#0B0F19",
     "primaryColor": "#0B0F19",
     "ios": {
-      "bundleIdentifier": "com.flux.app",
+      "bundleIdentifier": "com.halilu.fluxtimer",
       "buildNumber": "1",
       "supportsTablet": true,
       "userInterfaceStyle": "dark",

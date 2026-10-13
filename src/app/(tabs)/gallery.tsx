@@ -21,6 +21,16 @@ const ACCENT = '#8B5CF6';
 
 export const PRESET_KEY = 'flux:selectedPreset';
 
+// Synchronous in-memory mirror of the persisted preset. Gallery writes it
+// before the AsyncStorage write resolves, so a Timer focus-read that races
+// the write still resolves the fresh selection instead of a stale value.
+let cachedPresetId: string | null = null;
+
+/** Latest preset id selected in this process, if any. */
+export function getCachedPresetId(): string | null {
+  return cachedPresetId;
+}
+
 export interface ArtPreset {
   id: string;
   title: string;
@@ -62,7 +72,10 @@ export default function GalleryScreen() {
     (async () => {
       try {
         const saved = await AsyncStorage.getItem(PRESET_KEY);
-        if (saved) setSelectedId(saved);
+        if (saved) {
+          cachedPresetId = saved;
+          setSelectedId(saved);
+        }
       } catch {
         // Best effort.
       }
@@ -82,6 +95,9 @@ export default function GalleryScreen() {
     }, []),
   );
   const handleSelect = useCallback(async (id: string) => {
+    // Publish synchronously first so concurrent readers never see a stale value.
+    cachedPresetId = id;
+    setSelectedId(id);
     if (hapticRef.current !== 'off') {
       try {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -89,7 +105,6 @@ export default function GalleryScreen() {
         // Haptics best-effort.
       }
     }
-    setSelectedId(id);
     try {
       await AsyncStorage.setItem(PRESET_KEY, id);
     } catch {

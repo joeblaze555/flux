@@ -30,11 +30,13 @@ function Pill({
   index,
   scrollX,
   pageWidth,
+  active,
   onDotPress,
 }: {
   index: number;
   scrollX: SharedValue<number>;
   pageWidth: number;
+  active: boolean;
   onDotPress: (index: number) => void;
 }) {
   const animatedStyle = useAnimatedStyle(() => {
@@ -54,6 +56,7 @@ function Pill({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Go to slide ${index + 1}`}
+      accessibilityState={{ selected: active }}
       hitSlop={10}
       onPress={() => {
         void Haptics.selectionAsync();
@@ -65,11 +68,17 @@ function Pill({
 }
 
 export function Pagination({ count, scrollX, pageWidth, activeIndex, onDotPress }: PaginationProps) {
-  void activeIndex;
   return (
     <View style={styles.container} accessibilityRole="tablist">
       {Array.from({ length: count }, (_, i) => (
-        <Pill key={`pill-${i}`} index={i} scrollX={scrollX} pageWidth={pageWidth} onDotPress={onDotPress} />
+        <Pill
+          key={`pill-${i}`}
+          index={i}
+          scrollX={scrollX}
+          pageWidth={pageWidth}
+          active={i === activeIndex}
+          onDotPress={onDotPress}
+        />
       ))}
     </View>
   );

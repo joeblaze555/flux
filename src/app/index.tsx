@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -48,6 +48,10 @@ export default function OnboardingScreen() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isFinishing, setIsFinishing] = useState(false);
 
+  // Stable array reference: spreading per-render would remount list rows on
+  // every activeIndex change.
+  const slides = useMemo(() => [...ONBOARDING_SLIDES], []);
+
   const isLast = activeIndex === ONBOARDING_SLIDES.length - 1;
 
   const scrollHandler = useAnimatedScrollHandler({
@@ -69,10 +73,16 @@ export default function OnboardingScreen() {
 
   const goToIndex = useCallback(
     (index: number) => {
-      listRef.current?.scrollToIndex({ index, animated: true });
+      // scrollToOffset (not scrollToIndex): out-of-range / pre-layout calls
+      // clamp instead of throwing "scrollToIndex out of range".
+      try {
+        listRef.current?.scrollToOffset({ offset: index * width, animated: true });
+      } catch {
+        // List not laid out yet — activeIndex state still advances below.
+      }
       setActiveIndex(index);
     },
-    [],
+    [width],
   );
 
   const finishOnboarding = useCallback(async () => {
@@ -136,7 +146,7 @@ export default function OnboardingScreen() {
       {/* Swipeable pages */}
       <Animated.FlatList
         ref={listRef as never}
-        data={[...ONBOARDING_SLIDES]}
+        data={slides}
         keyExtractor={(item) => item.id}
         horizontal
         pagingEnabled
